@@ -2,99 +2,162 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Быки и коровы</title>
+    <title>Игра Быки и Коровы</title>
+
+    <style>
+        body {
+            background-color: #e0f7fa;
+            font-family: 'Times New Roman', Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+
+        #game-container {
+            width: 400px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 3px solid #000000;
+            padding: 20px;
+        }
+
+
+        button {
+            font-size: 16px;
+            padding: 10px;
+            background-color: #ffeb3b;
+            border: 2px solid #000;
+            cursor: pointer;
+            font-family: inherit;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #fdd835;
+        }
+
+        #guessInput {
+            font-size: 18px;
+            padding: 5px;
+            border: 2px solid #000;
+            width: 150px;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        #result {
+            color: black;
+            font-weight: bold;
+            margin-top: 15px;
+            font-size: 20px;
+        }
+
+        #history {
+            margin-top: 20px;
+            border-top: 2px dashed #000;
+            padding-top: 10px;
+            text-align: left;
+            font-family: monospace;
+        }
+
+        .history-item {
+            margin-bottom: 5px;
+        }
+    </style>
 </head>
+
 <body>
+
+<div id="game-container">
+
     <h1>Быки и коровы</h1>
-    <p>Угадай 4-значное число. Цифры не повторяются.</p>
+    <p>Угадай 4 цифры без повторений!</p>
 
     <button onclick="startGame()">Начать игру</button>
     <button onclick="endGame()">Сдаться</button>
 
-    <div id="gameArea" hidden>
-        <input type="text" id="guessInput" maxlength="4" placeholder="Введи число">
+    <div id="gameArea" style="display: none; margin-top: 15px;">
+        <input type="text" id="guessInput" maxlength="4" placeholder="1234" onkeypress="if(event.key==='Enter') makeGuess()">
+        <br>
         <button onclick="makeGuess()">Проверить</button>
     </div>
 
     <div id="result"></div>
+
     <div id="history"></div>
 
-    <script>
-        var gameId = null;
+</div>
 
-        function startGame() {
-            fetch('/api/game/start', {
-                method: 'POST'
-            })
-            .then(function(response) {
-                return response.json();
-            })
-            .then(function(data) {
-                gameId = data.gameId;
-                document.getElementById('gameArea').hidden = false;
-                document.getElementById('result').textContent = 'Игра начата!';
-                document.getElementById('history').innerHTML = '';
-            });
+<script>
+    var gameId = null;
+
+    function startGame() {
+        fetch('/api/game/start', {
+            method: 'POST'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            gameId = data.gameId;
+            document.getElementById('gameArea').style.display = 'block';
+            document.getElementById('result').innerText = "Игра началась! Вводи число.";
+            document.getElementById('history').innerHTML = "";
+        });
+    }
+
+    function makeGuess() {
+        if (!gameId) return;
+
+        var guess = document.getElementById('guessInput').value;
+
+        if (!/^\d{4}$/.test(guess)) {
+            alert("балбес, нужно ввести ровно 4 цифры!");
+            return;
         }
 
-        function makeGuess() {
-            if (!gameId) return;
+        fetch('/api/game/' + gameId + '/guess', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guess: guess })
+        })
+        .then(function(r) {
+            return r.json().then(function(data) {
+                if (!r.ok) throw new Error(data.error || "Какая-то ошибка");
+                return data;
+            });
+        })
+        .then(function(data) {
+            var msg = data.bulls + " быков, " + data.cows + " коров";
+            document.getElementById('result').innerText = data.message;
 
-            var guess = document.getElementById('guessInput').value;
-            if (guess.length != 4) {
-                alert('Введи 4 цифры');
-                return;
+            var history = document.getElementById('history');
+            // Добавляем запись в начало
+            history.innerHTML = '<div class="history-item"><b>' + guess + '</b> — ' + msg + '</div>' + history.innerHTML;
+
+            if (data.won) {
+                document.getElementById('gameArea').style.display = 'none';
+                gameId = null;
             }
 
-            fetch('/api/game/' + gameId + '/guess', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ guess: guess })
-            })
-            .then(function(response) {
-                return response.json().then(function(data) {
-                    if (!response.ok) {
-                        throw new Error(data.error || 'Ошибка');
-                    }
-                    return data;
-                });
-            })
-            .then(function(data) {
-                var msg = data.bulls + ' быков, ' + data.cows + ' коров';
-                document.getElementById('result').textContent = data.message;
+            document.getElementById('guessInput').value = "";
+        })
+        .catch(function(e) {
+            document.getElementById('result').innerText = "Ошибка: " + e;
+        });
+    }
 
-                var historyDiv = document.getElementById('history');
-                historyDiv.innerHTML = guess + ' - ' + msg + '<br>' + historyDiv.innerHTML;
+    function endGame() {
+        if (!gameId) return;
 
-                if (data.won) {
-                    document.getElementById('gameArea').hidden = true;
-                    gameId = null;
-                }
+        fetch('/api/game/' + gameId + '/end', {
+            method: 'POST'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('gameArea').style.display = 'none';
+            document.getElementById('result').innerText = "Ты сдался. Правильное число было: " + data.secretNumber;
+            gameId = null;
+        });
+    }
+</script>
 
-                document.getElementById('guessInput').value = '';
-            })
-            .catch(function(err) {
-                document.getElementById('result').textContent = 'Ошибка: ' + err;
-            });
-        }
-
-        function endGame() {
-            if (!gameId) return;
-
-            fetch('/api/game/' + gameId + '/end', {
-                method: 'POST'
-            })
-            .then(function(response) {
-                return response.json();
-            })
-            .then(function(data) {
-                document.getElementById('gameArea').hidden = true;
-                document.getElementById('result').textContent = 'Игра завершена. Загаданное число: ' + data.secretNumber;
-                gameId = null;
-            });
-        }
-    </script>
 </body>
 </html>

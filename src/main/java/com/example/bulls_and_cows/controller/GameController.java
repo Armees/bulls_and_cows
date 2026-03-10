@@ -22,6 +22,11 @@ public class GameController {
         this.gameService = gameService;
     }
 
+    @GetMapping("/")
+    public String home() {
+        return "index";
+    }
+
     @PostMapping("/start")
     public ResponseEntity<GameResponse> startGame() {
         Game game = gameService.startGame();
